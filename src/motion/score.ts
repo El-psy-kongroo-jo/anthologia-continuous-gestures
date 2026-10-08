@@ -1,7 +1,7 @@
 import { CONFIG } from '../config';
 import { mod, TAU } from '../core/math';
 import { ANGULAR_CHANNELS, CHANNELS, type Channel, type Pose } from '../core/types';
-import { PHRASES, REST, type Phrase, type PhraseId, type SectionName } from './phrases';
+import { REST, type Choreography, type Phrase, type PhraseId, type SectionName } from './phrases';
 import { Track, type Key } from './track';
 
 export interface Location {
@@ -16,6 +16,9 @@ export interface Location {
 /**
  * 구절들을 정해진 순서로 이어 붙인 순환 안무.
  * 작품 시간 t → 자세는 순수 함수이므로, 같은 t는 언제나 같은 자세를 만든다.
+ *
+ * 모든 구절의 키를 채널별로 한 곡선에 모은다. 구절 경계에도 같은 곡선이 이어지므로
+ * 위치와 속도가 연속이다. choreography.anchorRest이면 각 구절의 t = 0에 REST 키를 둔다.
  */
 export class Score {
   readonly duration: number;
@@ -24,9 +27,12 @@ export class Score {
   private readonly tracks: Record<Channel, Track>;
   private readonly breathPeriod: number;
 
-  constructor(order: readonly PhraseId[]) {
+  constructor(
+    readonly choreography: Choreography,
+    order: readonly PhraseId[] = choreography.order,
+  ) {
     if (order.length === 0) throw new Error('Score: 구절이 없습니다.');
-    this.phrases = order.map((id) => PHRASES[id]);
+    this.phrases = order.map((id) => choreography.phrases[id]);
     const starts: number[] = [];
     let acc = 0;
     for (const p of this.phrases) {
@@ -44,26 +50,30 @@ export class Score {
     this.phrases.forEach((phrase, i) => {
       const start = starts[i]!;
       for (const ch of CHANNELS) {
-        const own = phrase.keys
+        const local: Key[] = phrase.keys
           .filter((k) => k.pose[ch] !== undefined)
           .map((k) => ({ t: k.t, v: k.pose[ch]! }));
-        if (own.some((k) => k.t <= 0 || k.t >= phrase.duration)) {
-          throw new Error(`Score: ${phrase.id}.${ch}의 키는 (0, ${phrase.duration}) 안에 있어야 합니다.`);
+        const minT = choreography.anchorRest ? 0 : -1e-9;
+        if (local.some((k) => k.t <= minT || k.t >= phrase.duration)) {
+          throw new Error(`Score: ${phrase.id}.${ch}의 키가 구절 범위를 벗어났습니다.`);
         }
-        // 모든 구절은 t = 0의 휴식 자세에서 시작한다.
-        const local: Key[] = [{ t: 0, v: REST[ch] }, ...own];
+        if (choreography.anchorRest) local.unshift({ t: 0, v: REST[ch] });
         const offset = angleOffset[ch];
         for (const k of local) keys[ch].push({ t: start + k.t, v: k.v + offset });
-        if (ANGULAR_CHANNELS.has(ch)) {
-          const net = local.reduce((a, b) => (b.t > a.t ? b : a)).v - REST[ch];
-          const turns = Math.round(net / TAU);
-          if (Math.abs(net - turns * TAU) > 1e-9) {
-            throw new Error(`Score: ${phrase.id}.${ch}는 2π의 정수배로 끝나야 합니다 (현재 ${net}).`);
+        if (ANGULAR_CHANNELS.has(ch) && local.length > 0) {
+          // 회전은 구절마다 '정면 = 0' 기준으로 적는다. 마지막 키가 가리키는 바퀴 수만큼 누적한다.
+          const last = local.reduce((a, b) => (b.t > a.t ? b : a)).v;
+          const turns = Math.round(last / TAU);
+          if (Math.abs(last - turns * TAU) > Math.PI / 2) {
+            throw new Error(`Score: ${phrase.id}.${ch}의 마지막 방향(${last.toFixed(2)})이 정면에서 너무 멉니다.`);
           }
           angleOffset[ch] += turns * TAU;
         }
       }
     });
+
+    // 어느 구절에도 키가 없는 채널은 REST로 고정한다.
+    for (const ch of CHANNELS) if (keys[ch].length === 0) keys[ch].push({ t: 0, v: REST[ch] });
 
     const tracks = {} as Record<Channel, Track>;
     for (const ch of CHANNELS) tracks[ch] = new Track(keys[ch], this.duration, angleOffset[ch]);

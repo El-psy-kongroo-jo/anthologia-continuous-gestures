@@ -98,4 +98,13 @@ export const CONFIG = {
     /** 한 프레임에 반영되는 최대 경과 시간 */
     maxDelta: 1 / 15,
   },
+
+  playback: {
+    /** 감상 화면의 재생 배속 */
+    speed: 1,
+    /** 개발 화면의 시작 배속(비교 검토용). ?dev&speed=1 처럼 주소로 바꿀 수 있다. */
+    devSpeed: 1.5,
+    /** 개발 화면에서 고를 수 있는 배속 */
+    devSpeeds: [0.25, 0.5, 1, 1.25, 1.5, 2],
+  },
 } as const;

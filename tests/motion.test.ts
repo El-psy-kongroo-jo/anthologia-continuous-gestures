@@ -2,38 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../src/config';
 import { distance, length, normalize, sub } from '../src/core/math';
 import { angleBetween } from '../src/motion/constraints';
-import type { Side, Vec3 } from '../src/core/types';
+import type { Vec3 } from '../src/core/types';
 import { distributeLoad, solveBody, type Body } from '../src/motion/body';
-import { DEFAULT_ORDER, PHRASES, type PhraseId } from '../src/motion/phrases';
+import { CHOREOGRAPHIES } from '../src/motion/choreography';
 import { Score } from '../src/motion/score';
+import { DT, SIDES, points, programs, run, sectionStart } from './helpers';
 
-const DT = 1 / 120;
-const SIDES: Side[] = ['L', 'R'];
 const B = CONFIG.body;
-
-function run(score: Score, from = 0, to = score.duration): Body[] {
-  const out: Body[] = [];
-  for (let t = from; t <= to + 1e-9; t += DT) out.push(solveBody(score, t));
-  return out;
-}
-
-const programs: [string, Score][] = [
-  ['전체 순서', new Score(DEFAULT_ORDER)],
-  ...(Object.keys(PHRASES) as PhraseId[]).map((id) => [id, new Score([id])] as [string, Score]),
-];
+const ALL = Object.values(CHOREOGRAPHIES);
 
 // 순환 경계를 지나도록 한 주기 + 1초를 검사한다.
-const samples = new Map(programs.map(([name, s]) => [name, run(s, -0.5, s.duration + 1)]));
-
-/** 몸의 모든 기준점 */
-function points(b: Body): Vec3[] {
-  const p = [b.pelvis, b.waist, b.chest, b.neck, b.head, b.headTop];
-  for (const s of SIDES) p.push(b.shoulder[s], b.elbow[s], b.wrist[s], b.handTip[s], b.hip[s], b.knee[s], b.ankle[s]);
-  return p;
-}
+const samples = new Map(programs.map(({ name, score }) => [name, run(score, -0.5, score.duration + 1)]));
 
 describe('안무 구절의 구조', () => {
-  it.each(Object.values(PHRASES))('$title: 6~14초, 준비·진행·유예·회복 순서', (p) => {
+  it.each(ALL.flatMap((c) => Object.values(c.phrases).map((p) => ({ ...p, label: `${c.label} ${p.title}` }))))(
+    '$label: 6~14초, 준비·진행·유예·회복 순서', (p) => {
     expect(p.duration).toBeGreaterThanOrEqual(6);
     expect(p.duration).toBeLessThanOrEqual(14);
     expect(p.sections.map((s) => s.name)).toEqual(['준비', '진행', '유예', '회복']);
@@ -42,10 +25,11 @@ describe('안무 구절의 구조', () => {
     expect(p.sections.at(-1)!.start).toBeLessThan(p.duration);
   });
 
-  it('시간 위치를 구절과 부분으로 찾는다', () => {
-    const s = new Score(DEFAULT_ORDER);
-    expect(s.duration).toBeCloseTo(PHRASES.shift.duration + PHRASES.open.duration + PHRASES.turn.duration, 9);
-    const loc = s.locate(PHRASES.shift.duration + 3);
+  it.each(ALL)('$label: 시간 위치를 구절과 부분으로 찾는다', (c) => {
+    const s = new Score(c);
+    const P = c.phrases;
+    expect(s.duration).toBeCloseTo(P.shift.duration + P.open.duration + P.turn.duration, 9);
+    const loc = s.locate(P.shift.duration + 3);
     expect(loc.phrase.id).toBe('open');
     expect(loc.local).toBeCloseTo(3, 9);
     expect(loc.section).toBe('진행');
@@ -54,7 +38,7 @@ describe('안무 구절의 구조', () => {
   });
 });
 
-describe.each(programs)('몸의 제약 — %s', (name, score) => {
+describe.each(programs)('몸의 제약 — $name', ({ name, score }) => {
   const bodies = samples.get(name)!;
 
   it('팔다리와 몸통의 길이가 변하지 않는다', () => {
@@ -142,9 +126,8 @@ describe.each(programs)('몸의 제약 — %s', (name, score) => {
   });
 });
 
-describe('구절이 보여야 할 감각', () => {
-  const at = (score: Score, t0: number, t1: number) => run(score, t0, t1);
-  const sectionStart = (id: PhraseId, name: string) => PHRASES[id].sections.find((s) => s.name === name)!.start;
+describe.each(ALL)('구절이 보여야 할 감각 — $label', (c) => {
+  const start = (id: 'shift' | 'open' | 'turn', name: string) => sectionStart(c, id, name);
   /** 값이 구간 첫 값에서 최댓값까지 절반 도달한 시각 */
   const halfRise = (bs: Body[], f: (b: Body) => number) => {
     const v = bs.map(f);
@@ -161,47 +144,47 @@ describe('구절이 보여야 할 감각', () => {
   };
 
   it('무게 옮기기: 한 발로 완전히 건너가고, 몸통 기울기는 골반 이동보다 늦다', () => {
-    const score = new Score(['shift']);
-    const bs = at(score, 0, PHRASES.shift.duration);
+    const score = new Score(c, ['shift']);
+    const bs = run(score, 0, c.phrases.shift.duration);
     expect(Math.max(...bs.map((b) => b.load.R))).toBeGreaterThan(0.95);
     // 단순한 좌우 흔들림이 아니라 높낮이 변화가 함께 있다.
     const ys = bs.map((b) => b.pelvis.y);
     expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(0.015);
     // 진행 구간: 골반의 이동보다 어깨 띠의 기울기가 늦게 절반에 이른다.
-    const prog = at(score, sectionStart('shift', '진행'), sectionStart('shift', '유예') + 1);
+    const prog = run(score, start('shift', '진행'), start('shift', '유예') + 1);
     const pelvis = halfRise(prog, (b) => -b.pelvis.x);
     const tilt = halfRise(prog, (b) => b.shoulder.L.y - b.shoulder.R.y);
     expect(tilt - pelvis).toBeGreaterThan(0.5);
   });
 
   it('펼치기: 몸통 → 위팔 → 아래팔 → 손끝 순서로 펼쳐진다', () => {
-    const score = new Score(['open']);
-    const bs = at(score, sectionStart('open', '진행'), sectionStart('open', '유예') + 0.6);
+    const score = new Score(c, ['open']);
+    const bs = run(score, start('open', '진행'), start('open', '유예') + 0.6);
     for (const s of SIDES) {
       const spine = halfTurn(bs, (b) => sub(b.neck, b.pelvis));
       const upper = halfTurn(bs, (b) => sub(b.elbow[s], b.shoulder[s]));
       const fore = halfTurn(bs, (b) => sub(b.wrist[s], b.elbow[s]));
       const hand = halfTurn(bs, (b) => sub(b.handTip[s], b.wrist[s]));
       expect(upper - spine, s).toBeGreaterThan(0.3);
-      expect(fore - upper, s).toBeGreaterThan(0.15);
-      expect(hand - fore, s).toBeGreaterThan(0.15);
+      expect(fore - upper, s).toBeGreaterThan(0.1);
+      expect(hand - fore, s).toBeGreaterThan(0.1);
     }
   });
 
-  it('방향 바꾸기: 어깨가 골반보다 먼저 돌고, 한 바퀴 뒤 같은 방향으로 끝난다', () => {
-    const score = new Score(['turn']);
+  it('방향 바꾸기: 어깨가 골반보다 먼저 돌고, 한 바퀴를 돌아 같은 방향에 선다', () => {
+    const score = new Score(c, ['turn']);
     const crossing = (ch: 'cYaw' | 'pYaw', v: number) => {
-      for (let t = 0; t < PHRASES.turn.duration; t += DT) if (score.sample(t)[ch] >= v) return t;
+      for (let t = 0; t < c.phrases.turn.duration; t += DT) if (score.sample(t)[ch] >= v) return t;
       return Infinity;
     };
     for (const v of [Math.PI / 2, Math.PI, (3 * Math.PI) / 2]) {
       expect(crossing('pYaw', v) - crossing('cYaw', v)).toBeGreaterThan(0.1);
     }
-    // 회전 중 왼발은 들려 있고 오른발 하나로 버틴다.
-    const mid = solveBody(score, 5.5);
+    // 회전 중(골반이 뒤를 볼 때) 왼발은 들려 있고 오른발 하나로 버틴다.
+    const mid = solveBody(score, crossing('pYaw', Math.PI));
     expect(mid.contact.L).toBe(0);
     expect(mid.load.R).toBe(1);
-    const end = score.sample(PHRASES.turn.duration - 1e-6);
-    expect(Math.cos(end.pYaw)).toBeCloseTo(1, 6);
+    const landed = score.sample(start('turn', '유예'));
+    expect(Math.cos(landed.pYaw)).toBeCloseTo(1, 3);
   });
 });

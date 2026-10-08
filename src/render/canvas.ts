@@ -61,11 +61,30 @@ export class Renderer {
     this.ctx = ctx;
   }
 
+  /** 캔버스 전체를 지운다(뷰포트가 캔버스를 나눠 써도 한 번만 부른다). */
   clear(): void {
-    const { ctx, viewport: vp } = this;
-    ctx.setTransform(vp.pixelRatio, 0, 0, vp.pixelRatio, 0, 0);
+    const { ctx } = this;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#fbfbf9';
-    ctx.fillRect(0, 0, vp.width, vp.height);
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.setTransform(this.viewport.pixelRatio, 0, 0, this.viewport.pixelRatio, 0, 0);
+  }
+
+  /** 개발용 비교 화면: 뷰포트 위쪽의 이름표와 왼쪽 경계선 */
+  drawLabel(text: string): void {
+    const { ctx, viewport: vp } = this;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.font = '12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(text, vp.left + vp.width / 2, vp.height - 16);
+    if (vp.left > 0) {
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(vp.left, 0);
+      ctx.lineTo(vp.left, vp.height);
+      ctx.stroke();
+    }
   }
 
   drawBody(body: Body): void {
