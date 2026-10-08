@@ -1,5 +1,6 @@
 import type { FlowPreset, SheetPreset } from './form/flow';
 import type { StreamConfig } from './form/stream';
+import type { VeilConfig } from './form/veil';
 
 /**
  * Flow 기본 표현(설정 2): 몸과 추상의 경계. 먼저 이 하나를 완성한다.
@@ -155,6 +156,67 @@ const FLOW_E1: StreamConfig = {
   backAlpha: 0.3,
 };
 
+/**
+ * Flow 실험 E2: 선의 장(정지 화면 검토). 레퍼런스 드로잉의 '넓은 선의 장 아래에서 몸이 선을 솟게
+ * 하는' 관계를 한 개의 고정 자세로 검토한다. 움직임은 아직 없다. 모든 수치는 가설이다.
+ *
+ * 자세: 서 있는 몸. 머리 위, 골반 아래, 오른 다리(화면 왼쪽)로 지지하고 왼 다리는 접어 든다.
+ * 왼팔(화면 오른쪽)은 위로, 오른팔(화면 왼쪽)은 옆으로 펼친 비대칭.
+ */
+const FLOW_E2: VeilConfig = {
+  label: 'Flow 실험 E2 · 선의 장',
+  pose: {
+    px: -0.05, py: -0.01, pRoll: 0.07, pPitch: -0.02,
+    cYaw: 0.12, cLean: 0.13, cBend: -0.06,
+    hTilt: -0.12, hNod: -0.06, hYaw: 0.15,
+    aLEl: 2.55, aLAz: 0.12, aLEb: 0.3, aLWb: 0.15,
+    aREl: 1.5, aRAz: 0.12, aREb: 0.35, aRWb: 0.2,
+    fRX: -0.06, fRZ: 0, fRLift: 0,
+    fLX: 0.16, fLZ: -0.12, fLLift: 0.22, fLCarry: 0,
+  },
+  relief: {
+    cell: 0.006, pad: 0.45, tension: 3.0, soften: 0.012, shade: 0.03, near: 0.1, depth: 0.6, thickness: 1.1,
+    wide: { blur: 0.07, gain: 0.1 },
+  },
+  sheet: {
+    center: [-0.08, 0.6],
+    size: [1.72, 1.1],
+    angle: 0.1,
+    lines: 100,
+    samples: 520,
+    waves: [
+      { amp: 0.07, ku: 0.7, kv: 0.35, phase: 2.1 },
+      { amp: 0.04, ku: 1.5, kv: 0.6, phase: 0 },
+      { amp: 0.035, ku: 2.1, kv: 0.25, phase: 4.0 },
+      { amp: 0.02, ku: 2.7, kv: -0.9, phase: 1.3 },
+      { amp: 0.008, ku: 4.3, kv: 1.7, phase: 0.4 },
+    ],
+    shear: [{ amp: 0.02, ku: 0.8, kv: 1.2, phase: 0.7 }],
+    edge: {
+      inset: 0.035,
+      corner: 0.06,
+      left: [
+        { amp: 0.035, cycles: 1.3, phase: 0.5 },
+        { amp: 0.015, cycles: 3.1, phase: 2.0 },
+      ],
+      right: [
+        { amp: 0.04, cycles: 1.1, phase: 2.4 },
+        { amp: 0.014, cycles: 2.7, phase: 0.3 },
+      ],
+      jitter: 0.018,
+      fade: 0.03,
+    },
+  },
+  lift: { amount: 0.75, column: 0.0012 },
+  tone: { far: 0.2, body: 0.78, nearGamma: 0.8, compress: { gamma: 0.6, min: 0.6, max: 1.7 },
+    smooth: 5,
+    light: { direction: [0.6, 0.8], shade: 0.7, lit: 0.35, slope: 1.2 },
+    rim: 0.03, max: 0.85 },
+  frame: { center: [0, 0.6], size: [1.98, 1.32] },
+  lineWidth: 0.85,
+  color: '28, 28, 28',
+};
+
 export const CONFIG = {
   body: {
     /** 서 있을 때 골반 중심의 높이(발목 높이 + 다리 길이 - 약간의 여유). */
@@ -253,6 +315,7 @@ export const CONFIG = {
 
   /** Flow 실험 E1(기존 Flow와 별개, 개발 화면에서만) */
   flowE1: FLOW_E1,
+  flowE2: FLOW_E2,
 
   flow: {
     presets: FLOW_PRESETS,

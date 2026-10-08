@@ -5,8 +5,8 @@ import { solveBody, type Body } from './motion/body';
 import { CHOREOGRAPHIES, CURRENT, PREVIOUS } from './motion/choreography';
 import type { ChoreographyId } from './motion/phrases';
 import { Score } from './motion/score';
-import { drawMode, modeLabel, type ModeView } from './render/modes';
-import { drawReference } from './render/reference';
+import { drawMode, modeLabel, stillVeil, type ModeView } from './render/modes';
+import { drawReference, drawVeilReference } from './render/reference';
 import { Surface } from './render/surface';
 import { Viewport } from './render/viewport';
 import type { DevState, ShownScore } from './ui/debug';
@@ -111,14 +111,14 @@ let afterFrame: ((shown: ShownScore[]) => void) | null = null;
 
 if (devMode) {
   // 개발 화면 전용 URL 옵션:
-  // phrase=shift|open|turn|all, v=a1|a2, mode=structure|flow|flow-e1, preset=1|2|3, presence=0,
+  // phrase=shift|open|turn|all, v=a1|a2, mode=structure|flow|flow-e1|flow-e2, preset=1|2|3, presence=0,
   // compare=versions|presets|modes, t=초, paused, speed=배속, refs=1, panel=0
   const sel = params.get('phrase');
   if (sel === 'all' || sel === 'scene' || sel === 'shift' || sel === 'open' || sel === 'turn') state.selection = sel;
   const v = params.get('v');
   if (v === 'a1' || v === 'a2') state.version = v;
   const mode = params.get('mode');
-  if (mode === 'structure' || mode === 'flow' || mode === 'flow-e1') state.mode = mode;
+  if (mode === 'structure' || mode === 'flow' || mode === 'flow-e1' || mode === 'flow-e2') state.mode = mode;
   // Flow 실험 E1: presence=0이면 몸의 영향 없이 흐름만 본다(작업 순서 1의 확인용).
   state.e1Body = params.get('presence') !== '0';
   const preset = Number(params.get('preset'));
@@ -172,7 +172,10 @@ function frame(now: number): void {
     }
     surface.begin(p.viewport);
     drawMode(surface.ctx, p.viewport, p.view, p.score, t, body);
-    if (devMode && state.showReference) drawReference(surface.ctx, p.viewport, body);
+    if (devMode && state.showReference) {
+      if (p.view.mode === 'flow-e2') drawVeilReference(surface.ctx, p.viewport, stillVeil().body, CONFIG.flowE2);
+      else drawReference(surface.ctx, p.viewport, body);
+    }
     if (panels.length > 1) surface.drawLabel(p.viewport, p.label);
   }
   afterFrame?.([...bodies].map(([score, body]) => ({ score, body })));

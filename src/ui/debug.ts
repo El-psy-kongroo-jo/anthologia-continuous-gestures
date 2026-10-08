@@ -45,7 +45,7 @@ interface DevHooks {
 const FRAME = 1 / 30;
 const PHRASE_KEYS: Record<string, Selection> = { '0': 'all', '1': 'shift', '2': 'open', '3': 'turn', '4': 'scene' };
 const COMPARE_ORDER: CompareId[] = ['none', 'presets', 'modes', 'versions'];
-const MODE_ORDER: ModeId[] = ['structure', 'flow', 'flow-e1'];
+const MODE_ORDER: ModeId[] = ['structure', 'flow', 'flow-e1', 'flow-e2'];
 
 /**
  * 개발용 검토 화면. URL에 ?dev가 있을 때만 만들어지며 기본 감상 화면에는 존재하지 않는다.
@@ -92,6 +92,7 @@ export class DevPanel {
           <option value="structure">Structure</option>
           <option value="flow">Flow(천 모델)</option>
           <option value="flow-e1">Flow 실험 E1</option>
+          <option value="flow-e2">Flow 실험 E2 · 선의 장</option>
         </select>
         <label><input data-k="e1body" type="checkbox" /> E1 몸 영향</label>
         <select data-k="preset" aria-label="Flow 설정">

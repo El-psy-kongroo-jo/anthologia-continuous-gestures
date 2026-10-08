@@ -2,6 +2,8 @@ import { CONFIG } from '../config';
 import { v3 } from '../core/math';
 import type { Side, Vec3 } from '../core/types';
 import type { Body } from '../motion/body';
+import type { VeilConfig } from '../form/veil';
+import { veilFrame } from './veil';
 import type { Viewport } from './viewport';
 
 const SIDES: readonly Side[] = ['L', 'R'];
@@ -93,4 +95,37 @@ export function drawReference(ctx: CanvasRenderingContext2D, vp: Viewport, body:
   ctx.strokeStyle = 'rgba(40, 90, 200, 0.5)';
   ctx.lineWidth = 1;
   ctx.stroke();
+}
+
+/**
+ * Flow 실험 E2의 개발용 기준 표시: 선을 솟게 한 고정 자세의 관절을 E2의 정면 평면에 겹쳐 그린다.
+ * E2는 정면에서 본 평면이므로 3/4 시점의 기준 표시와 따로 둔다.
+ */
+export function drawVeilReference(ctx: CanvasRenderingContext2D, vp: Viewport, body: Body, C: VeilConfig): void {
+  const { cx, cy, fx, fy, scale } = veilFrame(vp, C);
+  const at = (v: Vec3) => [cx + (v.x - fx) * scale, cy - (v.y - fy) * scale] as const;
+  const bones: [Vec3, Vec3][] = [
+    [body.pelvis, body.waist],
+    [body.waist, body.chest],
+    [body.chest, body.neck],
+    [body.neck, body.headTop],
+    [body.shoulder.L, body.shoulder.R],
+    [body.hip.L, body.hip.R],
+  ];
+  for (const s of SIDES) {
+    bones.push([body.shoulder[s], body.elbow[s]], [body.elbow[s], body.wrist[s]], [body.wrist[s], body.handTip[s]]);
+    bones.push([body.hip[s], body.knee[s]], [body.knee[s], body.ankle[s]]);
+  }
+  ctx.save();
+  ctx.strokeStyle = 'rgba(40, 90, 200, 0.45)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const [a, b] of bones) {
+    const [ax, ay] = at(a);
+    const [bx, by] = at(b);
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
