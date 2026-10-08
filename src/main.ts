@@ -1,52 +1,92 @@
 import { CONFIG } from './config';
 import { Clock } from './core/clock';
-import { solveBody } from './motion/body';
+import { mod } from './core/math';
+import { solveBody, type Body } from './motion/body';
 import { CHOREOGRAPHIES, CURRENT, PREVIOUS } from './motion/choreography';
 import type { ChoreographyId } from './motion/phrases';
 import { Score } from './motion/score';
-import { Renderer } from './render/canvas';
+import { drawMode, modeLabel, type ModeView } from './render/modes';
+import { drawReference } from './render/reference';
+import { Surface } from './render/surface';
 import { Viewport } from './render/viewport';
-import type { DevState, Selection, ShownScore } from './ui/debug';
+import type { DevState, ShownScore } from './ui/debug';
 
 const canvas = document.getElementById('stage') as HTMLCanvasElement;
+const surface = new Surface(canvas);
 const params = new URLSearchParams(location.search);
 const devMode = params.has('dev');
 
 const state: DevState = {
-  selection: 'all',
+  selection: devMode ? 'scene' : 'all',
   version: CURRENT,
-  compare: false,
-  showReference: true,
+  mode: CONFIG.viewing.mode,
+  preset: CONFIG.flow.defaultPreset,
+  compare: 'none',
+  showReference: false,
 };
 
-const makeScore = (version: ChoreographyId, selection: Selection) => {
-  const c = CHOREOGRAPHIES[version];
-  return new Score(c, selection === 'all' ? c.order : [selection]);
-};
-
-/** 화면에 그릴 안무와 그 영역. 비교 화면에서는 왼쪽이 이전, 오른쪽이 현재 안무다. */
-interface Stage {
+/** 화면 한 칸: 어떤 안무를 어떤 표현으로 어디에 그리는지 */
+interface Panel {
   score: Score;
+  view: ModeView;
   viewport: Viewport;
-  renderer: Renderer;
+  label: string;
 }
 
-let stages: Stage[] = [];
+let panels: Panel[] = [];
+/** 검토 구간: 화면 시간을 [시작, 끝) 안에서 반복한다. */
+let range: readonly [number, number] | null = null;
 
+/** 검토 구간의 시작·끝(전체 순서 안의 초). 구절 시각과 여유로 정한다. */
+function reviewRange(score: Score): readonly [number, number] {
+  const at = (r: { phrase: string; section: string; offset: number }) => {
+    const i = score.phrases.findIndex((p) => p.id === r.phrase);
+    const sec = score.phrases[i]!.sections.find((x) => x.name === r.section)!;
+    return score.starts[i]! + sec.start + r.offset;
+  };
+  return [at(CONFIG.review.from), at(CONFIG.review.to)];
+}
+
+const viewTime = (t: number) => (range ? range[0] + mod(t - range[0], range[1] - range[0]) : t);
+
+/**
+ * 화면 구성을 만든다. 안무가 같은 칸들은 같은 Score를 공유하므로 매 프레임 같은 몸을 그린다.
+ * 비교 화면: versions = A-1 | A-2, presets = Flow 1 | 2 | 3, modes = Structure | Flow.
+ */
 function build(): void {
-  const entries: [ChoreographyId, { x: number; w: number }][] = state.compare
-    ? [[PREVIOUS, { x: 0, w: 0.5 }], [CURRENT, { x: 0.5, w: 0.5 }]]
-    : [[state.version, { x: 0, w: 1 }]];
-  stages = entries.map(([version, region]) => {
-    const viewport = new Viewport(canvas, region);
+  const scores = new Map<ChoreographyId, Score>();
+  const scoreOf = (id: ChoreographyId) => {
+    let s = scores.get(id);
+    if (!s) {
+      const c = CHOREOGRAPHIES[id];
+      const sel = state.selection;
+      s = new Score(c, sel === 'all' || sel === 'scene' ? c.order : [sel]);
+      scores.set(id, s);
+    }
+    return s;
+  };
+  const view: ModeView = { mode: state.mode, preset: state.preset };
+  const entries: { id: ChoreographyId; view: ModeView }[] =
+    state.compare === 'versions'
+      ? [{ id: PREVIOUS, view }, { id: CURRENT, view }]
+      : state.compare === 'presets'
+        ? ([1, 2, 3] as const).map((preset) => ({ id: state.version, view: { mode: 'flow', preset } }))
+        : state.compare === 'modes'
+          ? [{ id: state.version, view: { mode: 'structure', preset: state.preset } }, { id: state.version, view: { mode: 'flow', preset: state.preset } }]
+          : [{ id: state.version, view }];
+  const w = 1 / entries.length;
+  panels = entries.map(({ id, view }, i) => {
+    const viewport = new Viewport(canvas, { x: i * w, w });
     viewport.resize();
-    return { score: makeScore(version, state.selection), viewport, renderer: new Renderer(viewport) };
+    const label = state.compare === 'versions' ? `${CHOREOGRAPHIES[id].label} · ${modeLabel(view)}` : modeLabel(view);
+    return { score: scoreOf(id), view, viewport, label };
   });
+  range = state.selection === 'scene' ? reviewRange(panels.at(-1)!.score) : null;
 }
 
 function resize(): void {
   Viewport.fitCanvas(canvas);
-  for (const s of stages) s.viewport.resize();
+  for (const p of panels) p.viewport.resize();
 }
 
 const clock = new Clock(CONFIG.clock.maxDelta);
@@ -55,17 +95,27 @@ let afterFrame: ((shown: ShownScore[]) => void) | null = null;
 
 if (devMode) {
   // 개발 화면 전용 URL 옵션:
-  // phrase=shift|open|turn|all, v=a1|a2, compare, t=초, paused, speed=배속, refs=0, panel=0
+  // phrase=shift|open|turn|all, v=a1|a2, mode=structure|flow, preset=1|2|3,
+  // compare=versions|presets|modes, t=초, paused, speed=배속, refs=1, panel=0
   const sel = params.get('phrase');
-  if (sel === 'all' || sel === 'shift' || sel === 'open' || sel === 'turn') state.selection = sel;
+  if (sel === 'all' || sel === 'scene' || sel === 'shift' || sel === 'open' || sel === 'turn') state.selection = sel;
   const v = params.get('v');
   if (v === 'a1' || v === 'a2') state.version = v;
-  state.compare = params.has('compare');
-  state.showReference = params.get('refs') !== '0';
+  const mode = params.get('mode');
+  if (mode === 'structure' || mode === 'flow') state.mode = mode;
+  const preset = Number(params.get('preset'));
+  if (preset === 1 || preset === 2 || preset === 3) state.preset = preset;
+  const compare = params.get('compare');
+  if (compare === 'versions' || compare === 'presets' || compare === 'modes') state.compare = compare;
+  else if (compare === '') state.compare = 'versions';
+  state.showReference = params.get('refs') === '1';
   const speed = Number(params.get('speed') ?? CONFIG.playback.devSpeed);
   clock.speed = (CONFIG.playback.devSpeeds as readonly number[]).includes(speed) ? speed : CONFIG.playback.devSpeed;
+  build();
   const t = Number(params.get('t'));
-  if (Number.isFinite(t)) clock.seek(t);
+  // 검토 구간에서 t는 구간 시작으로부터의 초다.
+  if (params.has('t') && Number.isFinite(t)) clock.seek((range ? range[0] : 0) + t);
+  else if (range) clock.seek(range[0]);
   if (params.has('paused')) clock.pause();
 
   const { DevPanel } = await import('./ui/debug');
@@ -73,15 +123,18 @@ if (devMode) {
   const panel = new DevPanel({
     clock,
     state,
-    getPrimary: () => stages.at(-1)!.score,
+    getPrimary: () => panels.at(-1)!.score,
+    viewTime: () => viewTime(clock.now),
+    range: () => range,
     change: (patch) => {
       const restart =
         (patch.selection !== undefined && patch.selection !== state.selection) ||
         (patch.version !== undefined && patch.version !== state.version);
       Object.assign(state, patch);
       build();
-      // 같은 구절을 처음부터 비교할 수 있도록 구절·안무가 바뀌면 시간을 0으로 돌린다.
-      if (restart) clock.seek(0);
+      // 같은 구절을 처음부터 비교할 수 있도록 구절·안무가 바뀌면 처음(검토 구간이면 구간 시작)으로 돌린다.
+      // 표현(모드·Flow 설정·비교 화면)만 바뀌면 시간은 그대로 이어진다.
+      if (restart) clock.seek(range ? range[0] : 0);
     },
   });
   if (params.get('panel') === '0') panel.element.hidden = true;
@@ -90,20 +143,25 @@ if (devMode) {
 
 function frame(now: number): void {
   clock.tick(now);
-  const shown: ShownScore[] = [];
-  stages[0]!.renderer.clear();
-  for (const { score, renderer } of stages) {
-    const body = solveBody(score, clock.now);
-    renderer.drawBody(body);
-    if (devMode && state.showReference) renderer.drawReference(body);
-    if (state.compare) renderer.drawLabel(score.choreography.label);
-    shown.push({ score, body });
+  const t = viewTime(clock.now);
+  const bodies = new Map<Score, Body>();
+  surface.clear();
+  for (const p of panels) {
+    let body = bodies.get(p.score);
+    if (!body) {
+      body = solveBody(p.score, t);
+      bodies.set(p.score, body);
+    }
+    surface.begin(p.viewport);
+    drawMode(surface.ctx, p.viewport, p.view, p.score, t, body);
+    if (devMode && state.showReference) drawReference(surface.ctx, p.viewport, body);
+    if (panels.length > 1) surface.drawLabel(p.viewport, p.label);
   }
-  afterFrame?.(shown);
+  afterFrame?.([...bodies].map(([score, body]) => ({ score, body })));
   requestAnimationFrame(frame);
 }
 
-build();
+if (!devMode) build();
 resize();
 window.addEventListener('resize', resize);
 // 탭이 가려진 동안은 프레임이 멈춘다. 돌아왔을 때 긴 경과 시간을 적용하지 않는다.

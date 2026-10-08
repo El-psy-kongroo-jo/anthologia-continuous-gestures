@@ -1,8 +1,102 @@
+import type { FlowPreset, SheetPreset } from './form/flow';
+
 /**
- * 단계 A의 검토용 수치.
- * 모두 첫 구현의 가설이며 시각 검토를 통해 조정한다. 확정된 미학적 사양이 아니다.
- * 단위: 길이 = 몸 단위(서 있는 키 ≈ 1.0), 각도 = 라디안, 시간 = 초.
+ * Flow 기본 표현(설정 2): 몸과 추상의 경계. 먼저 이 하나를 완성한다.
+ * 모든 수치는 시각 검토용 가설이다.
  */
+/** 앞쪽 면: 늘어진 끝 → 들어 올린 팔(side) → 어깨 → 가슴을 가로질러 → 반대쪽 골반을 감고 → 뒤로 끌리는 끝 */
+function scarf(side: 'L' | 'R', standoff: number, alpha: number): SheetPreset {
+  const o = side === 'L' ? 'R' : 'L';
+  const away = side === 'L' ? -1 : 1;
+  return {
+    side,
+    path: [
+      { at: `wrist${side}`, up: 0.03, width: 0.04, free: 0.3 },
+      { at: `elbow${side}`, up: 0.04, width: 0.09, free: 0.1 },
+      { at: `shoulder${side}`, up: 0.04, width: 0.12, free: 0.03 },
+      { at: ['chest', 'waist', 0.45], forward: 0.13, width: 0.09, free: 0.12 },
+      { at: `hip${o}`, forward: 0.07, out: 0.05 * away, width: 0.15, free: 0.15 },
+      { at: [`hip${o}`, `knee${o}`, 0.5], forward: -0.01, out: 0.11 * away, width: 0.24, free: 0.6 },
+      { at: [`knee${o}`, `ankle${o}`, 0.3], forward: -0.2, out: 0.17 * away, width: 0.2, free: 1 },
+    ],
+    lines: 20,
+    samples: 72,
+    standoff,
+    sag: 0.05,
+    folds: { amp: 0.018, count: 3 },
+    fadeEnds: 0.16,
+    fadeSides: 0.6,
+    alpha,
+  };
+}
+
+/** 뒤쪽 면: 목 뒤에서 등을 타고 뒤로 넓게 흐르는 자락 */
+const TRAIN: SheetPreset = {
+  side: null,
+  path: [
+    { at: ['neck', 'chest', 0.4], up: 0.02, forward: -0.08, width: 0.2, free: 0.04 },
+    { at: ['chest', 'waist', 0.5], forward: -0.13, width: 0.26, free: 0.15 },
+    { at: 'pelvis', forward: -0.17, width: 0.32, free: 0.4 },
+    { at: ['kneeL', 'kneeR', 0.5], forward: -0.28, width: 0.38, free: 0.8 },
+    { at: ['ankleL', 'ankleR', 0.5], up: 0.03, forward: -0.42, width: 0.42, free: 1 },
+  ],
+  lines: 28,
+  samples: 60,
+  standoff: 0.01,
+  sag: 0.03,
+  folds: { amp: 0.025, count: 4 },
+  fadeEnds: 0.3,
+  fadeSides: 0.4,
+  alpha: 0.42,
+};
+
+/**
+ * Flow 기본 표현(설정 2): 몸과 추상의 경계. 먼저 이 하나를 완성한다.
+ * 모든 수치는 시각 검토용 가설이다.
+ */
+const FLOW_BASE: FlowPreset = {
+  label: 'Flow 2 · 경계(기본)',
+  sheets: [TRAIN, scarf('R', 0.006, 0.55), scarf('L', 0.03, 0.58)],
+  smooth: 0.035,
+  looseness: 0.05,
+  cling: 0.2,
+  push: 1,
+  inertia: { near: 0.12, far: 1.1, damping: 0.42 },
+  field: { amp: 0.012, wavelength: 0.9 },
+  lineWidth: 0.6,
+  backAlpha: 0.35,
+  occlusion: 1,
+  bodyOcclusion: 1,
+};
+
+/**
+ * 비교용 변형(아직 다듬지 않음): 기본 표현에서 몸에 붙는 정도와 관성만 바꾼다.
+ * k < 0 이면 천이 몸에 더 붙어 몸이 잘 읽히고, k > 0 이면 천이 더 늘어지고 흐른다.
+ */
+function variant(label: string, k: number): FlowPreset {
+  const s = (a: number) => Math.max(0, a * (1 + k));
+  return {
+    ...FLOW_BASE,
+    label,
+    sheets: FLOW_BASE.sheets.map((sh) => ({
+      ...sh,
+      sag: s(sh.sag),
+      folds: { ...sh.folds, amp: s(sh.folds.amp) },
+      path: sh.path.map((a) => ({ ...a, width: s(a.width), free: Math.min(1, s(a.free)) })),
+    })),
+    cling: Math.min(1, FLOW_BASE.cling * (1 - 0.5 * k)),
+    looseness: s(FLOW_BASE.looseness * (1 - 1.5 * k)),
+    inertia: { ...FLOW_BASE.inertia, far: s(FLOW_BASE.inertia.far) },
+    field: { ...FLOW_BASE.field, amp: s(FLOW_BASE.field.amp) * (1 + k) },
+  };
+}
+
+const FLOW_PRESETS: Record<1 | 2 | 3, FlowPreset> = {
+  1: variant('Flow 1 · 몸이 읽힘(미조정)', -0.5),
+  2: FLOW_BASE,
+  3: variant('Flow 3 · 흐름(미조정)', 0.8),
+};
+
 export const CONFIG = {
   body: {
     /** 서 있을 때 골반 중심의 높이(발목 높이 + 다리 길이 - 약간의 여유). */
@@ -97,6 +191,31 @@ export const CONFIG = {
   clock: {
     /** 한 프레임에 반영되는 최대 경과 시간 */
     maxDelta: 1 / 15,
+  },
+
+  flow: {
+    presets: FLOW_PRESETS,
+    /** 감상 화면의 Flow 설정 */
+    defaultPreset: 2 as 1 | 2 | 3,
+    color: '20, 20, 18',
+  },
+
+  /**
+   * 감상 화면: A-2 전체 순서를 Flow 기본 표현으로 보여 준다.
+   * 이전 화면(Structure)으로 돌아가려면 mode: 'structure'.
+   */
+  viewing: {
+    mode: 'flow' as 'structure' | 'flow',
+  },
+
+  /**
+   * 개발 화면의 검토 구간: A-2 전체 순서에서 '팔을 펼침 → 방향 전환 → 잠깐 멈춤'.
+   * 펼치기의 진행 직전부터 방향 바꾸기의 유예가 끝날 때까지를 반복한다(구절 시각 기준 여유, 초).
+   */
+  review: {
+    label: '펼침 → 방향 전환 → 멈춤',
+    from: { phrase: 'open', section: '진행', offset: -0.3 },
+    to: { phrase: 'turn', section: '회복', offset: 0.4 },
   },
 
   playback: {
