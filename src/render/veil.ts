@@ -15,11 +15,26 @@ export function veilFrame(vp: Viewport, C: VeilConfig): { cx: number; cy: number
 }
 
 export function drawVeil(ctx: CanvasRenderingContext2D, vp: Viewport, veil: Veil, C: VeilConfig): void {
-  const { cx, cy, fx, fy, scale } = veilFrame(vp, C);
+  drawToneLines(ctx, vp, veil.lines, C.frame, C.tone.max, C.lineWidth, C.color);
+}
+
+/**
+ * 점마다 진하기가 다른 선들을 그린다(평면 좌표, 몸 단위, y 위쪽). frame 영역을 뷰포트에 맞춘다.
+ * 진하기 0인 점이 끼인 선분은 그리지 않는다.
+ */
+export function drawToneLines(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  lines: readonly { x: Float32Array; y: Float32Array; a: Float32Array }[],
+  frame: VeilConfig['frame'],
+  maxA: number,
+  lineWidth: number,
+  color: string,
+): void {
+  const { cx, cy, fx, fy, scale } = veilFrame(vp, { frame } as VeilConfig);
   const paths: Path2D[] = [];
   for (let l = 0; l < LEVELS; l++) paths.push(new Path2D());
-  const maxA = C.tone.max;
-  for (const line of veil.lines) {
+  for (const line of lines) {
     const { x, y, a } = line;
     let level = -1;
     let path: Path2D | null = null;
@@ -42,11 +57,11 @@ export function drawVeil(ctx: CanvasRenderingContext2D, vp: Viewport, veil: Veil
     }
   }
   ctx.save();
-  ctx.lineWidth = C.lineWidth;
+  ctx.lineWidth = lineWidth;
   ctx.lineCap = 'butt';
   ctx.lineJoin = 'round';
   for (let l = 1; l < LEVELS; l++) {
-    ctx.strokeStyle = `rgba(${C.color}, ${((l / (LEVELS - 1)) * maxA).toFixed(3)})`;
+    ctx.strokeStyle = `rgba(${color}, ${((l / (LEVELS - 1)) * maxA).toFixed(3)})`;
     ctx.stroke(paths[l]!);
   }
   ctx.restore();

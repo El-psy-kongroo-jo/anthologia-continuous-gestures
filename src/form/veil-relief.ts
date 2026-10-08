@@ -129,12 +129,26 @@ function blur(src: Float32Array, nx: number, ny: number, sigmaCells: number): Fl
 }
 
 export function buildRelief(body: Body, C: ReliefConfig): Relief {
-  const caps = veilVolume(body).map((c) => ({ ...c, ra: c.ra * C.thickness, rb: c.rb * C.thickness, r: Math.max(c.ra, c.rb) * C.thickness }));
+  return buildReliefFromTapers(
+    veilVolume(body).map((t) => ({ ...t, zc: body.pelvis.z })),
+    C,
+  );
+}
+
+/**
+ * 여러 몸(또는 옮기고 크기를 바꾼 몸)의 부피로 하나의 막 높이를 만든다. zc는 그 막대가 속한 몸의 중심면 깊이.
+ */
+export function buildReliefFromTapers(tapers: readonly (Taper & { zc: number })[], C: ReliefConfig): Relief {
+  const caps = tapers.map((c) => ({
+    ...c,
+    ra: c.ra * C.thickness,
+    rb: c.rb * C.thickness,
+    r: Math.max(c.ra, c.rb) * C.thickness,
+  }));
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
   let maxY = -Infinity;
-  const zc = body.pelvis.z;
   const profile = C.profile ?? 0.5;
   for (const c of caps) {
     for (const p of [c.a, c.b]) {
@@ -175,7 +189,7 @@ export function buildRelief(body: Body, C: ReliefConfig): Relief {
         const rt = c.ra + (c.rb - c.ra) * t;
         const r2 = rt * rt;
         if (d2 >= r2) continue;
-        const z = Math.max(0, (c.a.z + t * dz - zc) * C.depth) + rt * Math.pow(1 - d2 / r2, profile);
+        const z = Math.max(0, (c.a.z + t * dz - c.zc) * C.depth) + rt * Math.pow(1 - d2 / r2, profile);
         const k = j * nx + i;
         if (z > front[k]!) front[k] = z;
         inside[k] = 1;

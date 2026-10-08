@@ -11,7 +11,9 @@ import { solveBody, type Body } from '../motion/body';
 import type { Score } from '../motion/score';
 import { drawFlow } from './flow';
 import { drawStream } from './stream';
-import { drawVeil } from './veil';
+import { drawToneLines, drawVeil } from './veil';
+import { layoutEnsemble, type Figure } from '../form/ensemble';
+import { fieldLines, strokeLines, traceLines, type ToneLine } from '../form/ensemble-styles';
 import { drawStructure } from './structure';
 import type { Viewport } from './viewport';
 
@@ -25,7 +27,18 @@ import type { Viewport } from './viewport';
  * - flow-e2m: E2의 같은 고정 자세 위로 선의 물결과 경계만 흐르는 짧은 순환. 개발 화면에서만
  * - trace: 지나간 움직임의 궤적(아직 구현하지 않음)
  */
-export type ModeId = 'structure' | 'flow' | 'flow-e1' | 'flow-e2' | 'flow-e2m';
+export type ModeId =
+  | 'structure'
+  | 'flow'
+  | 'flow-e1'
+  | 'flow-e2'
+  | 'flow-e2m'
+  | 'ens-trace'
+  | 'ens-stroke'
+  | 'ens-field';
+
+/** 앙상블 스케치 모드: 하나의 안무를 여러 인물이 다른 순간에 추는 화면의 추상 표현(개발 화면에서만) */
+export const ENSEMBLE_MODES: readonly ModeId[] = ['ens-trace', 'ens-stroke', 'ens-field'];
 export type FlowPresetId = 1 | 2 | 3;
 
 export interface ModeView {
@@ -59,10 +72,39 @@ function flowingVeil(t: number): Veil {
   return buildVeil(C, flowingRelief.body, mod(t, C.sheet.motion!.period), flowingRelief.relief);
 }
 
+let ensembleLayout: { duration: number; figs: Figure[] } | null = null;
+let fieldCache: { key: string; lines: ToneLine[] } | null = null;
+
+/** 앙상블 그리기. 배치는 안무 길이마다 한 번 정한다. 장(ens-field)은 계산이 무거워 0.25초 단위로만 다시 만든다. */
+function drawEnsemble(ctx: CanvasRenderingContext2D, vp: Viewport, mode: ModeId, score: Score, t: number): void {
+  const E = CONFIG.ensemble;
+  if (!ensembleLayout || ensembleLayout.duration !== score.duration) {
+    ensembleLayout = { duration: score.duration, figs: layoutEnsemble(E.layout, score.duration) };
+  }
+  const figs = ensembleLayout.figs;
+  const bodyAt = (_f: Figure, s: number) => solveBody(score, s);
+  let lines: ToneLine[];
+  let maxA = 1;
+  let width: number = E.lineWidth;
+  if (mode === 'ens-trace') lines = traceLines(figs, bodyAt, t, E.trace);
+  else if (mode === 'ens-stroke') lines = strokeLines(figs, bodyAt, t, E.stroke);
+  else {
+    const key = `${score.duration}:${Math.round(t * 4) / 4}`;
+    if (fieldCache?.key !== key) fieldCache = { key, lines: fieldLines(figs, bodyAt, Math.round(t * 4) / 4, E.field) };
+    lines = fieldCache.lines;
+    maxA = E.field.tone.max;
+    width = E.field.lineWidth;
+  }
+  drawToneLines(ctx, vp, lines, E.frame, maxA, width, E.color);
+}
+
 export function modeLabel(v: ModeView): string {
   if (v.mode === 'structure') return 'Structure';
   if (v.mode === 'flow-e2') return CONFIG.flowE2.label;
   if (v.mode === 'flow-e2m') return CONFIG.flowE2m.label;
+  if (v.mode === 'ens-trace') return '앙상블 · 궤적';
+  if (v.mode === 'ens-stroke') return '앙상블 · 획';
+  if (v.mode === 'ens-field') return '앙상블 · 장';
   if (v.mode === 'flow-e1') return CONFIG.flowE1.label + (v.presence === 0 ? ' · 몸 영향 없음' : '');
   return CONFIG.flow.presets[v.preset].label;
 }
@@ -82,6 +124,10 @@ export function drawMode(
   if (view.mode === 'flow-e2') {
     // 정지 화면 검토 단계: 안무 시간과 무관한 고정 자세. 기하는 한 번 계산해 재사용한다.
     drawVeil(ctx, vp, stillVeil(), CONFIG.flowE2);
+    return;
+  }
+  if (ENSEMBLE_MODES.includes(view.mode)) {
+    drawEnsemble(ctx, vp, view.mode, score, t);
     return;
   }
   if (view.mode === 'flow-e2m') {

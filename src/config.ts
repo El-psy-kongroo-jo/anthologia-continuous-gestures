@@ -1,6 +1,8 @@
 import type { FlowPreset, SheetPreset } from './form/flow';
 import type { StreamConfig } from './form/stream';
 import type { VeilConfig } from './form/veil';
+import type { EnsembleConfig } from './form/ensemble';
+import type { StrokeStyle, TraceStyle } from './form/ensemble-styles';
 
 /**
  * Flow 기본 표현(설정 2): 몸과 추상의 경계. 먼저 이 하나를 완성한다.
@@ -273,6 +275,58 @@ const FLOW_E2M: VeilConfig = {
   frame: { center: [0, 0.62], size: [2.02, 1.4] },
 };
 
+/**
+ * 앙상블 스케치: 하나의 안무를 여러 인물이 서로 다른 순간에 추는 화면을 추상적으로 표현하는 세 방식.
+ * Anthologia 회화(옅은 바탕의 많은 작은 인물, 같은 안무의 다른 순간, 선명함과 흐림의 층)를 시간 속으로
+ * 옮기는 방향을 확인하기 위한 정지 화면 스케치다. 안무는 아직 A-2(임시안, 덧배기춤과 무관)다.
+ */
+const ENSEMBLE: EnsembleConfig = {
+  count: 26,
+  seed: 7,
+  area: { center: [0, 0], size: [6, 3.6] },
+  scale: [0.42, 0.95],
+  spacing: 0.55,
+  clusters: [
+    [0.3, 0.6],
+    [0.68, 0.4],
+    [0.5, 0.5],
+  ],
+  pull: 0.45,
+  sharpShare: 0.3,
+  faint: [0.3, 0.65],
+};
+const ENSEMBLE_FRAME = { center: [0, 0.1] as const, size: [6.9, 4.6] as const };
+const ENSEMBLE_TRACE: TraceStyle = { span: 5, samples: 120, alpha: 0.85, gamma: 1.1 };
+const ENSEMBLE_STROKE: StrokeStyle = { passes: 12, lag: 0.16, alpha: 0.6, subdivide: 6 };
+const ENSEMBLE_FIELD: VeilConfig = {
+  ...FLOW_E2M,
+  label: '앙상블 · 장',
+  relief: {
+    cell: 0.008, pad: 0.3, tension: 2.4, soften: 0.012, shade: 0.03, near: 0.12, depth: 0.6, thickness: 1.2,
+    profile: 0.7,
+    wide: { blur: 0.06, gain: 0.1 },
+  },
+  sheet: {
+    ...FLOW_E2M.sheet,
+    center: [0, 0.1],
+    size: [6.3, 3.9],
+    angle: 0.06,
+    lines: 170,
+    samples: 1100,
+    waves: [
+      { amp: 0.16, ku: 1.0, kv: 0.35, phase: 2.1 },
+      { amp: 0.09, ku: 1.8, kv: 0.6, phase: 0 },
+      { amp: 0.05, ku: 3.1, kv: -0.5, phase: 4.0 },
+      { amp: 0.02, ku: 5.3, kv: 1.3, phase: 1.3 },
+    ],
+    shear: [{ amp: 0.05, ku: 0.8, kv: 1.2, phase: 0.7 }],
+    motion: undefined,
+  },
+  lift: { amount: 0.9, column: 0.004 },
+  frame: ENSEMBLE_FRAME,
+  lineWidth: 0.75,
+};
+
 export const CONFIG = {
   body: {
     /** 서 있을 때 골반 중심의 높이(발목 높이 + 다리 길이 - 약간의 여유). */
@@ -373,6 +427,15 @@ export const CONFIG = {
   flowE1: FLOW_E1,
   flowE2: FLOW_E2,
   flowE2m: FLOW_E2M,
+  ensemble: {
+    layout: ENSEMBLE,
+    frame: ENSEMBLE_FRAME,
+    trace: ENSEMBLE_TRACE,
+    stroke: ENSEMBLE_STROKE,
+    field: ENSEMBLE_FIELD,
+    lineWidth: 0.8,
+    color: '28, 28, 28',
+  },
 
   flow: {
     presets: FLOW_PRESETS,

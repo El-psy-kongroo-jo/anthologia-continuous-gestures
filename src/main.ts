@@ -5,7 +5,7 @@ import { solveBody, type Body } from './motion/body';
 import { CHOREOGRAPHIES, CURRENT, PREVIOUS } from './motion/choreography';
 import type { ChoreographyId } from './motion/phrases';
 import { Score } from './motion/score';
-import { drawMode, modeLabel, stillVeil, type ModeView } from './render/modes';
+import { drawMode, ENSEMBLE_MODES, modeLabel, stillVeil, type ModeView } from './render/modes';
 import { drawReference, drawVeilReference } from './render/reference';
 import { Surface } from './render/surface';
 import { Viewport } from './render/viewport';
@@ -87,7 +87,7 @@ function build(): void {
     const viewport = new Viewport(canvas, { x: i * w, w });
     viewport.resize();
     const label = state.compare === 'versions' ? `${CHOREOGRAPHIES[id].label} · ${modeLabel(view)}` : modeLabel(view);
-    const whole = view.mode === 'flow-e1' && state.selection !== 'scene';
+    const whole = (view.mode === 'flow-e1' || ENSEMBLE_MODES.includes(view.mode)) && state.selection !== 'scene';
     return { score: scoreOf(id, whole), view, viewport, label };
   });
   // Flow 실험 E1 하나만 볼 때는 E1의 장면을, E2 흐름만 볼 때는 흐름 주기를 반복한다.
@@ -98,6 +98,8 @@ function build(): void {
       ? [E.from, E.from + E.length]
       : state.mode === 'flow-e2m' && state.compare === 'none'
         ? [0, flowPeriod]
+        : ENSEMBLE_MODES.includes(state.mode) && state.compare === 'none'
+          ? [0, panels[0]!.score.duration]
         : state.selection === 'scene'
         ? reviewRange(panels.at(-1)!.score)
         : null;
@@ -121,9 +123,8 @@ if (devMode) {
   const v = params.get('v');
   if (v === 'a1' || v === 'a2') state.version = v;
   const mode = params.get('mode');
-  if (mode === 'structure' || mode === 'flow' || mode === 'flow-e1' || mode === 'flow-e2' || mode === 'flow-e2m') {
-    state.mode = mode;
-  }
+  const MODES: readonly string[] = ['structure', 'flow', 'flow-e1', 'flow-e2', 'flow-e2m', 'ens-trace', 'ens-stroke', 'ens-field'];
+  if (mode && MODES.includes(mode)) state.mode = mode as ModeView['mode'];
   // Flow 실험 E1: presence=0이면 몸의 영향 없이 흐름만 본다(작업 순서 1의 확인용).
   state.e1Body = params.get('presence') !== '0';
   const preset = Number(params.get('preset'));
