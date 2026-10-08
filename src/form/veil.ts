@@ -51,8 +51,11 @@ export interface Veil {
   density: { min: number; max: number };
 }
 
-export function buildVeil(C: VeilConfig, body: Body): Veil {
-  const relief = buildRelief(body, C.relief);
+/**
+ * 선의 장을 만든다. time은 흐름 주기 안의 초(정지 화면이면 0). 몸이 고정이면 relief를 미리 만들어
+ * 넘겨 매 프레임 다시 계산하지 않는다. 같은 입력은 항상 같은 선을 만든다.
+ */
+export function buildVeil(C: VeilConfig, body: Body, time = 0, relief: Relief = buildRelief(body, C.relief)): Veil {
   const S = C.sheet;
   const k = C.lift.amount;
 
@@ -67,7 +70,7 @@ export function buildVeil(C: VeilConfig, body: Body): Veil {
   let dMin = Infinity;
   let dMax = 0;
   for (let i = 0; i < S.lines; i++) {
-    const span = lineSpan(S, i);
+    const span = lineSpan(S, i, time);
     const N = Math.max(2, Math.round(S.samples * (span.u1 - span.u0)));
     const x = new Float32Array(N);
     const y = new Float32Array(N);
@@ -79,14 +82,14 @@ export function buildVeil(C: VeilConfig, body: Body): Veil {
     const gys = new Float32Array(N);
     for (let s = 0; s < N; s++) {
       const u = span.u0 + ((span.u1 - span.u0) * s) / (N - 1);
-      sheetPoint(S, u, span.v, p);
+      sheetPoint(S, u, span.v, p, time);
       sampleRelief(relief, p.x, p.y, rs);
       x[s] = p.x;
       y[s] = p.y + k * rs.h;
       near[s] = rs.near;
       gxs[s] = rs.gx;
       gys[s] = rs.gy;
-      sheetPoint(S, u, span.v + dv, q);
+      sheetPoint(S, u, span.v + dv, q, time);
       sampleRelief(relief, q.x, q.y, rs);
       nxs[s] = q.x;
       ny[s] = q.y + k * rs.h;

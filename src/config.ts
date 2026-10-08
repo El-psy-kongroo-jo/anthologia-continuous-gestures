@@ -217,6 +217,62 @@ const FLOW_E2: VeilConfig = {
   color: '28, 28, 28',
 };
 
+/**
+ * Flow 실험 E2 · 흐름: E2의 같은 고정 자세 위로 선의 물결과 바깥 경계만 흐르는 짧은 순환(몸은 움직이지 않는다).
+ * 정지 E2(FLOW_E2)는 비교용으로 그대로 두고, 이 설정에서 세 가지를 조정했다.
+ * 1. 주변 선을 옅게(far), 몸 위는 그대로 읽히게. 근접도는 넓게 흐려 경계에서 갑자기 바뀌지 않는다.
+ * 2. 좁은 능선 대신 넓은 곡면: 단면 모양(profile)을 완만하게, 장력을 낮추고 더 부드럽게, 간격에 따른 진함을 줄인다.
+ * 3. 가장자리: 옅어지는 길이를 v를 따라 완만히 바꿔 일부 구간은 옅은 선 끝이 읽히게(hem), 선마다의 차이는 줄여
+ *    이웃한 끝이 함께 넓은 물결을 이루게 한다.
+ * 흐름: 모든 물결이 주기 10초 동안 정수 번 선을 따라 지나간다. 바깥쪽은 같은 물결을 늦고 조금 크게 따른다.
+ */
+const FLOW_E2M: VeilConfig = {
+  ...FLOW_E2,
+  label: 'Flow 실험 E2 · 흐름(몸 고정)',
+  relief: {
+    cell: 0.006, pad: 0.45, tension: 2.4, soften: 0.016, shade: 0.04, near: 0.1, depth: 0.6, thickness: 1.15,
+    profile: 0.7,
+    wide: { blur: 0.07, gain: 0.1 },
+  },
+  sheet: {
+    ...FLOW_E2.sheet,
+    waves: [
+      // 가장 긴 물결도 장을 정확히 한 번 가로지르게 해서, 지나가는 동안 장 전체가 오르내리지 않게 한다.
+      { amp: 0.07, ku: 1.0, kv: 0.35, phase: 2.1, travel: 1 },
+      { amp: 0.04, ku: 1.5, kv: 0.6, phase: 0, travel: 2 },
+      { amp: 0.035, ku: 2.1, kv: 0.25, phase: 4.0, travel: 2 },
+      { amp: 0.02, ku: 2.7, kv: -0.9, phase: 1.3, travel: 3 },
+      { amp: 0.008, ku: 4.3, kv: 1.7, phase: 0.4, travel: 4 },
+    ],
+    shear: [{ amp: 0.02, ku: 0.8, kv: 1.2, phase: 0.7, travel: 1 }],
+    edge: {
+      inset: 0.035,
+      corner: 0.06,
+      left: [
+        { amp: 0.03, cycles: 0.9, phase: 0.5, travel: 1 },
+        { amp: 0.012, cycles: 2.2, phase: 2.0, travel: 1 },
+      ],
+      right: [
+        { amp: 0.035, cycles: 0.8, phase: 2.4, travel: 1 },
+        { amp: 0.012, cycles: 2.0, phase: 0.3, travel: 2 },
+      ],
+      jitter: 0.005,
+      fade: 0.03,
+      fadeVary: { range: [0.35, 1.8], cycles: 2.3, phase: 0.4 },
+    },
+    motion: { period: 10, edgeLag: 0.6, edgeAmp: 0.25, edgeZone: [0.3, 0.5] },
+  },
+  lift: { amount: 0.75, column: 0.0012 },
+  tone: {
+    far: 0.085, body: 0.8, nearGamma: 0.85, compress: { gamma: 0.5, min: 0.7, max: 1.35 },
+    smooth: 6,
+    light: { direction: [0.6, 0.8], shade: 0.6, lit: 0.3, slope: 1.2 },
+    rim: 0.03, max: 0.85,
+    hem: { gain: 1.3, width: 2.5 },
+  },
+  frame: { center: [0, 0.62], size: [2.02, 1.4] },
+};
+
 export const CONFIG = {
   body: {
     /** 서 있을 때 골반 중심의 높이(발목 높이 + 다리 길이 - 약간의 여유). */
@@ -316,6 +372,7 @@ export const CONFIG = {
   /** Flow 실험 E1(기존 Flow와 별개, 개발 화면에서만) */
   flowE1: FLOW_E1,
   flowE2: FLOW_E2,
+  flowE2m: FLOW_E2M,
 
   flow: {
     presets: FLOW_PRESETS,

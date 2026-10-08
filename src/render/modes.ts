@@ -3,6 +3,7 @@ import type { Vec3 } from '../core/types';
 import { buildFlow } from '../form/flow';
 import { buildStream } from '../form/stream';
 import { buildVeil, type Veil } from '../form/veil';
+import { buildRelief, type Relief } from '../form/veil-relief';
 import { stillBody } from '../motion/still';
 import { mod } from '../core/math';
 import { INERTIA_DT } from '../form/inertia';
@@ -20,10 +21,11 @@ import type { Viewport } from './viewport';
  * - structure: 최소한의 구조선(단계 A의 표현)
  * - flow: 여러 선이 함께 흐르며 몸을 암시(기본 감상 모드, 현재는 천 모델)
  * - flow-e1: Flow 실험 E1(연관된 선들의 흐름 속에서 몸의 방향이 잠시 나타났다 풀림). 개발 화면에서만
- * - flow-e2: Flow 실험 E2(넓은 선의 장 아래에서 몸이 선을 솟게 함). 지금은 고정 자세의 정지 화면. 개발 화면에서만
+ * - flow-e2: Flow 실험 E2(넓은 선의 장 아래에서 몸이 선을 솟게 함). 고정 자세의 정지 화면(비교용). 개발 화면에서만
+ * - flow-e2m: E2의 같은 고정 자세 위로 선의 물결과 경계만 흐르는 짧은 순환. 개발 화면에서만
  * - trace: 지나간 움직임의 궤적(아직 구현하지 않음)
  */
-export type ModeId = 'structure' | 'flow' | 'flow-e1' | 'flow-e2';
+export type ModeId = 'structure' | 'flow' | 'flow-e1' | 'flow-e2' | 'flow-e2m';
 export type FlowPresetId = 1 | 2 | 3;
 
 export interface ModeView {
@@ -46,9 +48,21 @@ export function stillVeil(): Veil {
   return veilCache;
 }
 
+let flowingRelief: { body: Body; relief: Relief } | null = null;
+/** E2 흐름: 몸이 고정이므로 몸과 막의 높이는 한 번만 만들고, 선은 흐름 시간마다 다시 계산한다. */
+function flowingVeil(t: number): Veil {
+  const C = CONFIG.flowE2m;
+  if (!flowingRelief) {
+    const body = stillBody(C.pose);
+    flowingRelief = { body, relief: buildRelief(body, C.relief) };
+  }
+  return buildVeil(C, flowingRelief.body, mod(t, C.sheet.motion!.period), flowingRelief.relief);
+}
+
 export function modeLabel(v: ModeView): string {
   if (v.mode === 'structure') return 'Structure';
   if (v.mode === 'flow-e2') return CONFIG.flowE2.label;
+  if (v.mode === 'flow-e2m') return CONFIG.flowE2m.label;
   if (v.mode === 'flow-e1') return CONFIG.flowE1.label + (v.presence === 0 ? ' · 몸 영향 없음' : '');
   return CONFIG.flow.presets[v.preset].label;
 }
@@ -68,6 +82,10 @@ export function drawMode(
   if (view.mode === 'flow-e2') {
     // 정지 화면 검토 단계: 안무 시간과 무관한 고정 자세. 기하는 한 번 계산해 재사용한다.
     drawVeil(ctx, vp, stillVeil(), CONFIG.flowE2);
+    return;
+  }
+  if (view.mode === 'flow-e2m') {
+    drawVeil(ctx, vp, flowingVeil(t), CONFIG.flowE2m);
     return;
   }
   if (view.mode === 'flow-e1') {

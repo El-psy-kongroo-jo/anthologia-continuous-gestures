@@ -90,12 +90,15 @@ function build(): void {
     const whole = view.mode === 'flow-e1' && state.selection !== 'scene';
     return { score: scoreOf(id, whole), view, viewport, label };
   });
-  // Flow 실험 E1 하나만 볼 때는 E1의 장면을 반복한다.
+  // Flow 실험 E1 하나만 볼 때는 E1의 장면을, E2 흐름만 볼 때는 흐름 주기를 반복한다.
   const E = CONFIG.flowE1.scene;
+  const flowPeriod = CONFIG.flowE2m.sheet.motion!.period;
   range =
     state.mode === 'flow-e1' && state.compare === 'none'
       ? [E.from, E.from + E.length]
-      : state.selection === 'scene'
+      : state.mode === 'flow-e2m' && state.compare === 'none'
+        ? [0, flowPeriod]
+        : state.selection === 'scene'
         ? reviewRange(panels.at(-1)!.score)
         : null;
 }
@@ -111,14 +114,16 @@ let afterFrame: ((shown: ShownScore[]) => void) | null = null;
 
 if (devMode) {
   // 개발 화면 전용 URL 옵션:
-  // phrase=shift|open|turn|all, v=a1|a2, mode=structure|flow|flow-e1|flow-e2, preset=1|2|3, presence=0,
+  // phrase=shift|open|turn|all, v=a1|a2, mode=structure|flow|flow-e1|flow-e2|flow-e2m, preset=1|2|3, presence=0,
   // compare=versions|presets|modes, t=초, paused, speed=배속, refs=1, panel=0
   const sel = params.get('phrase');
   if (sel === 'all' || sel === 'scene' || sel === 'shift' || sel === 'open' || sel === 'turn') state.selection = sel;
   const v = params.get('v');
   if (v === 'a1' || v === 'a2') state.version = v;
   const mode = params.get('mode');
-  if (mode === 'structure' || mode === 'flow' || mode === 'flow-e1' || mode === 'flow-e2') state.mode = mode;
+  if (mode === 'structure' || mode === 'flow' || mode === 'flow-e1' || mode === 'flow-e2' || mode === 'flow-e2m') {
+    state.mode = mode;
+  }
   // Flow 실험 E1: presence=0이면 몸의 영향 없이 흐름만 본다(작업 순서 1의 확인용).
   state.e1Body = params.get('presence') !== '0';
   const preset = Number(params.get('preset'));
@@ -173,7 +178,9 @@ function frame(now: number): void {
     surface.begin(p.viewport);
     drawMode(surface.ctx, p.viewport, p.view, p.score, t, body);
     if (devMode && state.showReference) {
-      if (p.view.mode === 'flow-e2') drawVeilReference(surface.ctx, p.viewport, stillVeil().body, CONFIG.flowE2);
+      if (p.view.mode === 'flow-e2' || p.view.mode === 'flow-e2m') {
+        drawVeilReference(surface.ctx, p.viewport, stillVeil().body, CONFIG.flowE2);
+      }
       else drawReference(surface.ctx, p.viewport, body);
     }
     if (panels.length > 1) surface.drawLabel(p.viewport, p.label);

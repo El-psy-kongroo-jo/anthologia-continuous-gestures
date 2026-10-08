@@ -25,6 +25,11 @@ export interface ToneConfig {
   light: { direction: readonly [number, number]; shade: number; lit: number; slope: number };
   /** 장의 위·아래 가장자리에서 옅어지는 폭(v) */
   rim: number;
+  /**
+   * 선 끝 가까이를 조금 진하게 해서 옅은 선 끝이 읽히게 한다(테두리 선은 아님).
+   * gain: 진하기 배율, width: 옅어지는 길이의 몇 배까지 영향을 주는지. 없으면 끝은 그냥 사라진다.
+   */
+  hem?: { gain: number; width: number };
   max: number;
 }
 
@@ -51,5 +56,6 @@ export function toneAt(
   const light = turn > 0 ? 1 + L.shade * turn : 1 + L.lit * turn;
   const rim = smoothstep(0, T.rim, v) * smoothstep(0, T.rim, 1 - v);
   const fade = smoothstep(0, 1, edge);
-  return Math.min(T.max, base * Math.pow(d, T.compress.gamma) * light * rim * fade);
+  const hem = T.hem ? 1 + T.hem.gain * (1 - smoothstep(1, 1 + T.hem.width, edge)) : 1;
+  return Math.min(T.max, base * Math.pow(d, T.compress.gamma) * light * rim * fade * hem);
 }

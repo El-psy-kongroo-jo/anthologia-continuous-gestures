@@ -33,6 +33,11 @@ export interface ReliefConfig {
   depth: number;
   /** 몸의 부피(반지름) 배율 */
   thickness: number;
+  /**
+   * 단면의 모양: 높이 = r·(1 − (d/r)²)^profile. 0.5는 둥근 막대의 앞면(윤곽에서 가파름),
+   * 1에 가까울수록 윤곽 가까이에서 완만하게 올라왔다 내려가는 넓은 곡면. 없으면 0.5.
+   */
+  profile?: number;
   /** 농도(빛을 등진 비탈)에 쓰는 기울기를 얻을 때의 흐림: 작은 주름이 아니라 큰 덩어리의 돌아섬을 따른다 */
   shade: number;
   /** 몸 주변의 넓고 낮은 솟음: 높이를 크게 흐려 더하는 표준편차와 배율. 주변의 선도 몸을 지나며 함께 휜다 */
@@ -130,6 +135,7 @@ export function buildRelief(body: Body, C: ReliefConfig): Relief {
   let minY = Infinity;
   let maxY = -Infinity;
   const zc = body.pelvis.z;
+  const profile = C.profile ?? 0.5;
   for (const c of caps) {
     for (const p of [c.a, c.b]) {
       minX = Math.min(minX, p.x - c.r);
@@ -169,7 +175,7 @@ export function buildRelief(body: Body, C: ReliefConfig): Relief {
         const rt = c.ra + (c.rb - c.ra) * t;
         const r2 = rt * rt;
         if (d2 >= r2) continue;
-        const z = Math.max(0, (c.a.z + t * dz - zc) * C.depth) + Math.sqrt(r2 - d2);
+        const z = Math.max(0, (c.a.z + t * dz - zc) * C.depth) + rt * Math.pow(1 - d2 / r2, profile);
         const k = j * nx + i;
         if (z > front[k]!) front[k] = z;
         inside[k] = 1;
