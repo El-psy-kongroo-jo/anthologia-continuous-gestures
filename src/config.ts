@@ -1,4 +1,5 @@
 import type { FlowPreset, SheetPreset } from './form/flow';
+import type { StreamConfig } from './form/stream';
 
 /**
  * Flow 기본 표현(설정 2): 몸과 추상의 경계. 먼저 이 하나를 완성한다.
@@ -97,6 +98,63 @@ const FLOW_PRESETS: Record<1 | 2 | 3, FlowPreset> = {
   3: variant('Flow 3 · 흐름(미조정)', 0.8),
 };
 
+/**
+ * Flow 실험 E1: 연관된 선들의 흐름 속에서 몸과 춤의 방향이 잠시 나타났다가 풀리는 짧은 장면.
+ * 기존 Flow(천 모델)와 별개의 실험이며, 모든 수치는 시각 검토용 가설이다.
+ * 장면 시간 σ = 0은 A-2 전체 순서의 5.6초(무게 옮기기의 회복)이고, 19초 뒤 처음으로 이어진다.
+ *   σ 0–3.3   흐름만(몸의 영향 없음)
+ *   σ 3.3–9.4 팔이 뻗는 방향(펼치기의 폭발·유예·내려옴)
+ *   σ 7.0–15  몸통·골반의 비틀림(감김·회전)
+ *   σ 13–19   풀림과 여운(회전의 착지·유예 동안 몸의 영향 없이 흐름으로 돌아감)
+ */
+const FLOW_E1: StreamConfig = {
+  label: 'Flow 실험 E1',
+  scene: { from: 5.6, length: 19 },
+  grid: 1 / 30,
+  trail: 75,
+  inertia: { step: 2, samples: 24, period: 0.8, damping: 0.5 },
+  lines: 22,
+  width: 0.11,
+  spread: [0.45, 1.4],
+  stream: { center: [0, 0.68, 0], radius: [0.4, 0.27, 0.26], cycles: [2, 3, 2], phase: [0, 0.6, 1.4] },
+  ribbons: [
+    {
+      body: { kind: 'arm', side: 'L', period: 3.2, spread: 0.08 },
+      presence: [3.3, 4.6, 7.4, 9.4],
+      delay: 0,
+      offset: [0, 0.04, 0],
+      roll: { base: 0.3, amp: 1.0, cycles: 3, phase: 0 },
+      alpha: 0.5,
+    },
+    {
+      body: { kind: 'arm', side: 'R', period: 3.4, spread: 0.08 },
+      presence: [3.5, 4.9, 7.2, 9.0],
+      delay: 0.45,
+      offset: [0.03, -0.02, 0.03],
+      roll: { base: -0.2, amp: 1.1, cycles: 4, phase: 1.2 },
+      alpha: 0.48,
+    },
+    {
+      body: { kind: 'orbit', level: 'chest', radius: 0.2, period: 3.4 },
+      presence: [7.0, 9.0, 12.6, 14.6],
+      delay: 0.9,
+      offset: [-0.03, 0.02, -0.02],
+      roll: { base: 0.6, amp: 0.9, cycles: 2, phase: 0.6 },
+      alpha: 0.48,
+    },
+    {
+      body: { kind: 'orbit', level: 'pelvis', radius: 0.16, period: 3.8 },
+      presence: [7.6, 9.6, 13.0, 15.0],
+      delay: 1.35,
+      offset: [0.02, -0.05, 0],
+      roll: { base: -0.5, amp: 1.0, cycles: 3, phase: 2.0 },
+      alpha: 0.45,
+    },
+  ],
+  lineWidth: 0.6,
+  backAlpha: 0.3,
+};
+
 export const CONFIG = {
   body: {
     /** 서 있을 때 골반 중심의 높이(발목 높이 + 다리 길이 - 약간의 여유). */
@@ -192,6 +250,9 @@ export const CONFIG = {
     /** 한 프레임에 반영되는 최대 경과 시간 */
     maxDelta: 1 / 15,
   },
+
+  /** Flow 실험 E1(기존 Flow와 별개, 개발 화면에서만) */
+  flowE1: FLOW_E1,
 
   flow: {
     presets: FLOW_PRESETS,

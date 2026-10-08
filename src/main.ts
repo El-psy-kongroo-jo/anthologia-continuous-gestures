@@ -23,6 +23,7 @@ const state: DevState = {
   preset: CONFIG.flow.defaultPreset,
   compare: 'none',
   showReference: false,
+  e1Body: true,
 };
 
 /** 화면 한 칸: 어떤 안무를 어떤 표현으로 어디에 그리는지 */
@@ -51,37 +52,52 @@ const viewTime = (t: number) => (range ? range[0] + mod(t - range[0], range[1] -
 
 /**
  * 화면 구성을 만든다. 안무가 같은 칸들은 같은 Score를 공유하므로 매 프레임 같은 몸을 그린다.
- * 비교 화면: versions = A-1 | A-2, presets = Flow 1 | 2 | 3, modes = Structure | Flow.
+ * 비교 화면: versions = A-1 | A-2, presets = Flow 1 | 2 | 3, modes = Structure | Flow | Flow 실험 E1.
+ * Flow 실험 E1은 A-2 전체 순서 위의 자기 장면을 쓰므로 항상 A-2 전체 순서의 Score를 받는다.
  */
 function build(): void {
-  const scores = new Map<ChoreographyId, Score>();
-  const scoreOf = (id: ChoreographyId) => {
-    let s = scores.get(id);
+  const scores = new Map<string, Score>();
+  const scoreOf = (id: ChoreographyId, whole: boolean) => {
+    const key = `${id}:${whole}`;
+    let s = scores.get(key);
     if (!s) {
       const c = CHOREOGRAPHIES[id];
       const sel = state.selection;
-      s = new Score(c, sel === 'all' || sel === 'scene' ? c.order : [sel]);
-      scores.set(id, s);
+      s = new Score(c, whole || sel === 'all' || sel === 'scene' ? c.order : [sel]);
+      scores.set(key, s);
     }
     return s;
   };
-  const view: ModeView = { mode: state.mode, preset: state.preset };
+  const presence = state.e1Body ? 1 : 0;
+  const view: ModeView = { mode: state.mode, preset: state.preset, presence };
   const entries: { id: ChoreographyId; view: ModeView }[] =
     state.compare === 'versions'
       ? [{ id: PREVIOUS, view }, { id: CURRENT, view }]
       : state.compare === 'presets'
         ? ([1, 2, 3] as const).map((preset) => ({ id: state.version, view: { mode: 'flow', preset } }))
         : state.compare === 'modes'
-          ? [{ id: state.version, view: { mode: 'structure', preset: state.preset } }, { id: state.version, view: { mode: 'flow', preset: state.preset } }]
-          : [{ id: state.version, view }];
+          ? [
+              { id: state.version, view: { mode: 'structure', preset: state.preset } },
+              { id: state.version, view: { mode: 'flow', preset: state.preset } },
+              { id: CURRENT, view: { mode: 'flow-e1', preset: state.preset, presence } },
+            ]
+          : [{ id: view.mode === 'flow-e1' ? CURRENT : state.version, view }];
   const w = 1 / entries.length;
   panels = entries.map(({ id, view }, i) => {
     const viewport = new Viewport(canvas, { x: i * w, w });
     viewport.resize();
     const label = state.compare === 'versions' ? `${CHOREOGRAPHIES[id].label} · ${modeLabel(view)}` : modeLabel(view);
-    return { score: scoreOf(id), view, viewport, label };
+    const whole = view.mode === 'flow-e1' && state.selection !== 'scene';
+    return { score: scoreOf(id, whole), view, viewport, label };
   });
-  range = state.selection === 'scene' ? reviewRange(panels.at(-1)!.score) : null;
+  // Flow 실험 E1 하나만 볼 때는 E1의 장면을 반복한다.
+  const E = CONFIG.flowE1.scene;
+  range =
+    state.mode === 'flow-e1' && state.compare === 'none'
+      ? [E.from, E.from + E.length]
+      : state.selection === 'scene'
+        ? reviewRange(panels.at(-1)!.score)
+        : null;
 }
 
 function resize(): void {
@@ -95,14 +111,16 @@ let afterFrame: ((shown: ShownScore[]) => void) | null = null;
 
 if (devMode) {
   // 개발 화면 전용 URL 옵션:
-  // phrase=shift|open|turn|all, v=a1|a2, mode=structure|flow, preset=1|2|3,
+  // phrase=shift|open|turn|all, v=a1|a2, mode=structure|flow|flow-e1, preset=1|2|3, presence=0,
   // compare=versions|presets|modes, t=초, paused, speed=배속, refs=1, panel=0
   const sel = params.get('phrase');
   if (sel === 'all' || sel === 'scene' || sel === 'shift' || sel === 'open' || sel === 'turn') state.selection = sel;
   const v = params.get('v');
   if (v === 'a1' || v === 'a2') state.version = v;
   const mode = params.get('mode');
-  if (mode === 'structure' || mode === 'flow') state.mode = mode;
+  if (mode === 'structure' || mode === 'flow' || mode === 'flow-e1') state.mode = mode;
+  // Flow 실험 E1: presence=0이면 몸의 영향 없이 흐름만 본다(작업 순서 1의 확인용).
+  state.e1Body = params.get('presence') !== '0';
   const preset = Number(params.get('preset'));
   if (preset === 1 || preset === 2 || preset === 3) state.preset = preset;
   const compare = params.get('compare');

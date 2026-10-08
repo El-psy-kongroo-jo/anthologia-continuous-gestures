@@ -20,6 +20,8 @@ export interface DevState {
   /** 나란히 보기: 안무 A-1·A-2 / Flow 설정 1·2·3 / Structure·Flow */
   compare: CompareId;
   showReference: boolean;
+  /** Flow 실험 E1에서 몸의 영향을 켤지(끄면 흐름만) */
+  e1Body: boolean;
 }
 
 export interface ShownScore {
@@ -43,12 +45,14 @@ interface DevHooks {
 const FRAME = 1 / 30;
 const PHRASE_KEYS: Record<string, Selection> = { '0': 'all', '1': 'shift', '2': 'open', '3': 'turn', '4': 'scene' };
 const COMPARE_ORDER: CompareId[] = ['none', 'presets', 'modes', 'versions'];
+const MODE_ORDER: ModeId[] = ['structure', 'flow', 'flow-e1'];
 
 /**
  * 개발용 검토 화면. URL에 ?dev가 있을 때만 만들어지며 기본 감상 화면에는 존재하지 않는다.
  *
  * 단축키: Space 재생/정지 · ←/→ 1/30초 이동(Shift: 1초) · 0 전체 · 1/2/3 구절 ·
- * M Structure/Flow · F Flow 설정 1→2→3 · C 비교 화면 전환 · V 안무 A-1/A-2 · R 기준점 표시
+ * M Structure → Flow → Flow 실험 E1 · B E1 몸 영향 켜기/끄기 · F Flow 설정 1→2→3 ·
+ * C 비교 화면 전환 · V 안무 A-1/A-2 · R 기준점 표시
  */
 export class DevPanel {
   private readonly root: HTMLElement;
@@ -63,6 +67,7 @@ export class DevPanel {
   private readonly compareEl: HTMLSelectElement;
   private readonly modeEl: HTMLSelectElement;
   private readonly presetEl: HTMLSelectElement;
+  private readonly e1BodyBox: HTMLInputElement;
   private scrubbing = false;
 
   constructor(private readonly hooks: DevHooks) {
@@ -85,15 +90,17 @@ export class DevPanel {
       <div class="dev-row">
         <select data-k="mode" aria-label="표현">
           <option value="structure">Structure</option>
-          <option value="flow">Flow</option>
+          <option value="flow">Flow(천 모델)</option>
+          <option value="flow-e1">Flow 실험 E1</option>
         </select>
+        <label><input data-k="e1body" type="checkbox" /> E1 몸 영향</label>
         <select data-k="preset" aria-label="Flow 설정">
           ${([1, 2, 3] as const).map((n) => `<option value="${n}">${CONFIG.flow.presets[n].label}</option>`).join('')}
         </select>
         <select data-k="cmp" aria-label="나란히 비교">
           <option value="none">비교 없음</option>
           <option value="presets">비교: Flow 1·2·3</option>
-          <option value="modes">비교: Structure·Flow</option>
+          <option value="modes">비교: Structure·Flow·E1</option>
           <option value="versions">비교: 안무 A-1·A-2</option>
         </select>
       </div>
@@ -122,6 +129,7 @@ export class DevPanel {
     this.compareEl = q<HTMLSelectElement>('cmp');
     this.modeEl = q<HTMLSelectElement>('mode');
     this.presetEl = q<HTMLSelectElement>('preset');
+    this.e1BodyBox = q<HTMLInputElement>('e1body');
     this.playBtn = q<HTMLButtonElement>('play');
     this.speedEl = q<HTMLSelectElement>('speed');
     this.slider = q<HTMLInputElement>('t');
@@ -135,6 +143,7 @@ export class DevPanel {
     this.compareEl.addEventListener('change', () => hooks.change({ compare: this.compareEl.value as CompareId }));
     this.modeEl.addEventListener('change', () => hooks.change({ mode: this.modeEl.value as ModeId }));
     this.presetEl.addEventListener('change', () => hooks.change({ preset: Number(this.presetEl.value) as FlowPresetId }));
+    this.e1BodyBox.addEventListener('change', () => hooks.change({ e1Body: this.e1BodyBox.checked }));
     this.playBtn.addEventListener('click', () => clock.toggle());
     this.speedEl.addEventListener('change', () => (clock.speed = Number(this.speedEl.value)));
     this.refBox.addEventListener('change', () => (state.showReference = this.refBox.checked));
@@ -157,7 +166,9 @@ export class DevPanel {
       else if (e.key === 'v' || e.key === 'V') hooks.change({ version: state.version === 'a1' ? 'a2' : 'a1' });
       else if (e.key === 'c' || e.key === 'C')
         hooks.change({ compare: COMPARE_ORDER[(COMPARE_ORDER.indexOf(state.compare) + 1) % COMPARE_ORDER.length]! });
-      else if (e.key === 'm' || e.key === 'M') hooks.change({ mode: state.mode === 'flow' ? 'structure' : 'flow' });
+      else if (e.key === 'm' || e.key === 'M')
+        hooks.change({ mode: MODE_ORDER[(MODE_ORDER.indexOf(state.mode) + 1) % MODE_ORDER.length]! });
+      else if (e.key === 'b' || e.key === 'B') hooks.change({ e1Body: !state.e1Body });
       else if (e.key === 'f' || e.key === 'F') hooks.change({ preset: ((state.preset % 3) + 1) as FlowPresetId });
       else if (e.key === 'r' || e.key === 'R') state.showReference = !state.showReference;
       else return;
@@ -198,6 +209,7 @@ export class DevPanel {
     this.modeEl.disabled = state.compare === 'presets' || state.compare === 'modes';
     this.presetEl.value = String(state.preset);
     this.presetEl.disabled = state.compare === 'presets';
+    this.e1BodyBox.checked = state.e1Body;
     this.refBox.checked = state.showReference;
     this.speedEl.value = String(clock.speed);
     this.slider.max = String(range ? range[1] - range[0] : primary.duration);

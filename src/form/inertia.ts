@@ -22,14 +22,14 @@ export function stepResponse(t: number, period: number, damping: number): number
 }
 
 /**
- * 과거 표본 k(시간 k·INERTIA_DT 전)에 곱할 가중치. 합은 정확히 1이다.
+ * 과거 표본 k(시간 k·dt 전)에 곱할 가중치. 합은 정확히 1이다.
  * period가 표본 간격보다 충분히 짧으면 거의 현재 몸만 따른다.
  */
-export function inertiaWeights(period: number, damping: number): number[] {
+export function inertiaWeights(period: number, damping: number, dt = INERTIA_DT, samples = INERTIA_SAMPLES): number[] {
   const w: number[] = [];
   let prev = 0;
-  for (let k = 0; k < INERTIA_SAMPLES; k++) {
-    const edge = k === INERTIA_SAMPLES - 1 ? 1 : stepResponse((k + 0.5) * INERTIA_DT, period, damping);
+  for (let k = 0; k < samples; k++) {
+    const edge = k === samples - 1 ? 1 : stepResponse((k + 0.5) * dt, period, damping);
     w.push(edge - prev);
     prev = edge;
   }
