@@ -1,0 +1,41 @@
+.dev-panel {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  max-width: calc(100vw - 24px);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #222;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.dev-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dev-row input[type='range'] {
+  flex: 1 1 200px;
+  min-width: 120px;
+}
+
+.dev-panel button,
+.dev-panel select {
+  font: inherit;
+}
+
+.dev-text {
+  white-space: pre;
+}
+
+.dev-panel[hidden] {
+  display: none;
+}
